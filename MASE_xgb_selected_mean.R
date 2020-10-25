@@ -842,7 +842,3 @@ SummaryErrorAll %>%
   facet_grid(reorder(Level, -desc(Level))~.) +
   facet_wrap(. ~ Method)
 theme_bw(base_size = 14)
-
-
-
-
