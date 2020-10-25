@@ -10,6 +10,11 @@ library(kernlab)
 library(gbm)
 library(seer)
 library(tsfeatures)
+library(caret)
+library(mcb)
+library(randomForest)
+library(xgboost)
+library(tstools)
 
 setwd("C:/Temp/Model selection")
 
@@ -310,7 +315,7 @@ for (tsid in 1:55) {
   origin <- 26 #Starting origin (26weeks)
   tslength <- 85 #Available observations
   #tslength <- length(data[[tsid]]$bts[,1]) #Available observations
-  fh = 1 #Forecasting horizon considered
+  fh = 2 #Forecasting horizon considered
   
   while ((origin+counter+fh) <= tslength){
     
@@ -335,7 +340,7 @@ for (tsid in 1:55) {
     fore.mint.shr.ro <- (forecast(hts.data.scan.train, h=fh, method = "comb", fmethod = "arima",xreg =  as.numeric(aggts(hts.data.price.train, levels = 0))
                                   , newxreg =  as.numeric(aggts(hts.data.price.test, levels = 0)), weights = c("mint"), covariance = "shr"))
     
-       fore.bu.ro <- forecast(hts.data.scan.train, h=fh, method = "bu", fmethod = "arima", xreg = as.numeric(aggts(hts.data.price.train, levels = 0))
+    fore.bu.ro <- forecast(hts.data.scan.train, h=fh, method = "bu", fmethod = "arima", xreg = as.numeric(aggts(hts.data.price.train, levels = 0))
                            , newxreg =  as.numeric(aggts(hts.data.price.test, levels = 0)))
     
    
@@ -369,8 +374,14 @@ for (tsid in 1:55) {
                            entropy, arch_acf, garch_acf, arch_r2, garch_r2,
                            diff1_acf1,diff1_acf10,diff2_acf1,diff2_acf10))
     
-    chr.train <- cbind(t(chrtrain[,1]),t(chrtrain[,2]),t(chrtrain[,3]),t(rowMeans(chrtrain[,4:15])))
     
+    #train_cor <- rcorr(as.matrix(allts(hts.data.scan.train)))$r
+    #train_cor <- cbind(min(train_cor[1,2],train_cor[1,3]),min(train_cor[1,4:15]), min(train_cor[2,4:15],train_cor[3,4:15]),
+     #                  min(train_cor[4:15,4:15]), train_cor[2,3]) 
+    #colnames(train_cor) <- c("cor01","cor02","cor12", "corL2", "corL1")
+    
+    
+    chr.train <- cbind(t(chrtrain[,1]),t(chrtrain[,2]),t(chrtrain[,3]),t(rowMeans(chrtrain[,4:15])))
     
     repML=counter+1
     originML=length(train_sample[,1])
@@ -406,7 +417,7 @@ for (tsid in 1:55) {
       
       
       
-            error_list_train <- NULL
+      error_list_train <- NULL
       for (j in 1:ncol(allts(hts.data.scan.test))){
         error_list_train <- rbind(error_list_train,error_cal(allts(hts.data.scan.train)[,j],all[,j],allts(hts.data.scan.test)[,j],ppy=1))
       }
@@ -417,6 +428,7 @@ for (tsid in 1:55) {
       Errors$tsid <- tsid
       Errors$origin <- origin
       Errors$hs <- c(1:j)
+      #Errors$best <- which.min(colMeans(Errors[,1:3]))
       Summary_error_train <- rbind(Summary_error_train, Errors)
       
       
@@ -435,13 +447,13 @@ for (tsid in 1:55) {
     ML_data <- data.frame((cbind(t(data.frame(t(chr.train))), Selected_model, repML, originML, tsid)))
     ML_data_train <- rbind(ML_data_train, ML_data)
   
-    counter <- counter + 1
+    counter <- counter + 2
   } 
 }
 
 
 
-models <- c("WLS", "Shr", "BU", "MO", "TDFP", "TDGSA", "TDGSF")
+#models <- c("WLS", "Shr", "BU", "MO", "TDFP", "TDGSA", "TDGSF")
 models_selected <- c( "Shr", "BU","TDGSF")
 
 ######## second phase ########
@@ -466,14 +478,15 @@ recon_bottom_f_all <- NULL
 chr_test <- NULL 
 recon_f <- NULL
 recon_bottom_f <- NULL
-
+selected_vars_all <- NULL
+#fh = 5
 for (tsid in 1:55) {
   
   counter <- 0
   origin_id <- 83 #Starting origin (26weeks)
   tslength_id <- 120 #Available observations
   #tslength <- length(data[[tsid]]$bts[,1]) #Available observations
-  fh = 1 #Forecasting horizon considered
+  fh = 2 #Forecasting horizon considered
   
   while ((origin_id+counter+fh) <= tslength_id){
     
@@ -567,6 +580,11 @@ for (tsid in 1:55) {
       
       chrtest <- rbind(chrtest,(t(chr.test)))
     }
+   # test_cor <- rcorr(as.matrix(allts(hts.data.scan.test)))$r
+    #test_cor <- cbind(min(test_cor[1,2],test_cor[1,3]),min(test_cor[1,4:15]), min(test_cor[2,4:15],test_cor[3,4:15]),
+     #                  min(test_cor[4:15,4:15]), test_cor[2,3]) 
+    #colnames(test_cor) <- c("cor01","cor02","cor12", "corL2", "corL1")
+    
     #This one used features of series at all levels
     chr_test <- data.frame(cbind(t(chrtest[1,]),(t(chrtest[2,])+t(chrtest[3,])/2),t(colMeans(chrtest[4:15,])),t(colMeans(chrtest[4:15,]))))
     chr_test <- chr_test[,-c(51:75)]
@@ -598,7 +616,7 @@ for (tsid in 1:55) {
     chr_test_selected <- cbind(chr_test[which(names(chr_test) %in% c(names(selected_vars)))],y=Errors_test1$best[1])
     
     ML_model_RF <- randomForest(x = Reconcile_data[which(names(Reconcile_data) %in% c(names(selected_vars)))] ,
-                                y= y_value, ntree = 100)
+                                y= y_value, ntree = 150)
     
     
     RF_output <- predict(ML_model_RF, chr_test_selected[1:25])
@@ -609,8 +627,8 @@ for (tsid in 1:55) {
                              y=t(y_value)))
     
     
-    kernfit <- ksvm(as.matrix(dat[,-dim(dat)[2]]),dat$y, type = "C-svc", kernel = 'rbfdot', 
-                    C = 100, scaled = TRUE)
+    kernfit <- ksvm(as.matrix(dat[,-dim(dat)[2]]),dat$y, type = "kbb-svc", kernel = 'rbfdot', 
+                    C = 200, scaled = TRUE)
     
     SVM_output <- predict(kernfit, chr_test_selected[1:25])
 
@@ -682,23 +700,22 @@ for (tsid in 1:55) {
     colnames(Errors_test) <- c("CR_RF","CR_SVM", "XGB_class")
     
     Summary_error_test_f <- rbind(Summary_error_test_f, cbind(Errors_test,Errors_test1))
-    counter <- counter + 1
+    counter <- counter + 2
   }
   
 }
 
 correct_class <- which(recon_bottom_f_all$`as.numeric(ML_output[ML])`== recon_bottom_f_all$`Errors_test1$best[1]`)
-write.csv(correct_class,"correct_class_xgb-RMSE.csv")
+write.csv(correct_class,"RMSSE_correct_class.csv")
 
 write.csv(Summary_error_test_f, "RMSSE_Summary_error.csv")
-#Summary_error_test_f <- read.csv("MASE_Summary_error_mean_selected_xgb.csv")
 
 
-write.csv(recon_bottom_f_all,"EMSSE_recon_bottom.csv")
-#recon_bottom_f_all <- read.csv("recon_bottom_f_mean_selected_xgb.csv")
+write.csv(recon_bottom_f_all,"RMSSE_recon_bottom.csv")
+#recon_bottom_f_all <- read.csv("EMSSE_recon_bottom.csv")
 
 write.csv(chr_test_stack, "RMSSE_chr_test_stack.csv")
-#chr_test_stack <- read.csv("chr_test_stack_mean_selected_xgb.csv")
+#chr_test_stack <- read.csv("RMSSE_chr_test_stack.csv")
 
 write.csv(chr_test_selected, "RMSSE_chr_test_selected.csv")
 
@@ -708,139 +725,166 @@ corrplot(cor(selected_vars), order = "hclust")
 
 
 
+Summary_error_test_f <- read.csv("RMSSE_Summary_error.csv")
+
+Summary_error_test_f_MASE <- read.csv("MASE_Summary_error_test.csv")
+
 outliers_f <- c(11,12,13,19,43,53,54)
+
 
 Summary_error_test_fn <- Summary_error_test_f %>% 
   filter(tsid != outliers_f)
 
-apply(Summary_error_test_fn[Summary_error_test_fn$level==3,],2,mean)
-apply(Summary_error_test_fn[Summary_error_test_fn$level==2,],2,mean)
-apply(Summary_error_test_fn[Summary_error_test_fn$level==1,],2,mean)
-
-ff <- Summary_error_test_f %>% 
-  as_tibble() %>% 
-  select(-counter) %>%
-  group_by(tsid) %>%
-  summarise(CR_mean = mean(CR), 
-            WLS_mean = mean(WLS),
-            Shr_mean = mean(Shr),
-            BU_mean = mean(BU),
-            MO_mean = mean(MO),
-            TDFP_mean = mean(TDFP),
-            TDGSA_mean = mean(TDGSA),
-            TDGF_mean = mean(TDGSF)) %>%  
-  #filter(CR_mean < Shr_mean)%>%
-  filter(CR_mean < 1)
-#, BU_mean, MO_mean, TDFP_mean, TDGSA_mean, TDGF_mean))
+Summary_error_test_fn_MASE <- Summary_error_test_f_MASE %>% 
+  filter(tsid != outliers_f)
 
 
-Errors_plot <- ddply(Summary_error_test_f, .(level,origin), colwise(mean))
-Errors_plot$mid <- as.factor(Errors_plot$mid)
-Errors_plot$Level <- as.factor(Errors_plot$Level)
-ggplot(data=Errors_plot, aes(x=origin, y=MASE, colour=level)) + geom_line() + geom_point()
+l1 <- apply(Summary_error_test_fn[Summary_error_test_fn$level==1,],2,mean)
+l2 <-apply(Summary_error_test_fn[Summary_error_test_fn$level==2,],2,mean)
+l3 <- apply(Summary_error_test_fn[Summary_error_test_fn$level==3,],2,mean)
 
 
-Errors_agg <- ddply(Summary_error, .(mid, Level), colwise(mean))
-Errors_agg$origin <- NULL
-ddply(Errors_agg, .(mid), colwise(mean))
-
-write.csv(Summary_error, paste0("Summary_error_ML_RF",model_type,".csv"), row.names = F)
+summary_level_methods <- rbind(l1[1:7], l2[1:7], l3[1:7])
+xtable::xtable(t(summary_level_methods), digits=3)
 
 
-SummaryErrorAll <- read_xlsx("SummaryErrorAll.xlsx")
+
+
+
+
+# Errors_plot <- ddply(Summary_error_test_f, .(level,counter), colwise(mean))
+# Errors_plot$mid <- as.factor(Errors_plot$mid)
+# Errors_plot$Level <- as.factor(Errors_plot$Level)
+# ggplot(data=Errors_plot, aes(x=origin, y=MASE, colour=level)) + geom_line() + geom_point()
+# 
+# 
+# Errors_agg <- ddply(Summary_error, .(mid, Level), colwise(mean))
+# Errors_agg$origin <- NULL
+# ddply(Errors_agg, .(mid), colwise(mean))
+# 
+# write.csv(Summary_error, paste0("Summary_error_ML_RF",model_type,".csv"), row.names = F)
+
+
+Summary_error_MASE <- bind_cols(Summary_error_test_fn_MASE, Accuracy="MASE") %>% select(-tsid, -counter, -best, -X)#%>% 
+ # rename(COM_SHR=COM_Shr,CHR_XGB=XGB_class, CHR_SVM=CR_SVM, CHR_RF=CR_RF, TD=TDGSF)
+Summary_error_RMSSE <- bind_cols(Summary_error_test_fn, Accuracy="RMSSE") %>% select(-tsid, -counter, -best) 
+#%>%
+  #rename(COM_SHR=COM_Shr,CHR_XGB=XGB_class, CHR_SVM=CR_SVM, CHR_RF=CR_RF, TD=TDGSF)
+
+SummaryErrorAll <- bind_rows(pivot_longer(Summary_error_RMSSE, -c(Accuracy, level), values_to = "Value", names_to = "Methods"),
+                             pivot_longer(Summary_error_MASE, -c(Accuracy, level), values_to = "Value", names_to = "Methods"))
+
+SummaryErrorAll1 <- SummaryErrorAll %>% filter(level==1) %>% mutate(level="Level 1") %>% tail(n=-1)
+SummaryErrorAll2 <- SummaryErrorAll %>% filter(level==2) %>% mutate(level="Level 2") %>% tail(n=-1)
+SummaryErrorAll3 <- SummaryErrorAll %>% filter(level==3) %>% mutate(level="Level 3") %>% tail(n=-1)
+
+SummaryErrorAll_bind <- bind_rows(SummaryErrorAll1,SummaryErrorAll2,SummaryErrorAll3) %>% mutate(Value=as.numeric(Value))
 ## Plots for the paper
 
-plot.gts(hts.scan[[30]], labels = FALSE)
-
 
 SummaryErrorAll %>% 
-  select(-series, -origin, - AMSE, -RMSSE) %>% 
-  group_by(Level, Method) %>%
-  select(MASE, Level, Method) %>%
-  ggplot(aes(x=Method, y=MASE, fill = Method))+
+  #select(-series, -origin, - AMSE, -RMSSE) %>% 
+  group_by(level, Methods) %>%
+  #select(MASE, Level, Method) %>%
+  ggplot(aes(x=Methods, y=Value, fill=Accuracy))+
   labs(title="", x="")+
   theme(legend.position = "none") + 
   scale_y_continuous(limits = c(0,1)) + 
   geom_boxplot() + 
-  facet_grid(~Level) + 
+  facet_grid(~level) + 
+  #facet_wrap(~Level)
   coord_flip() +
-  facet_grid(reorder(Level, -desc(Level))~.) +
+  facet_grid(reorder(level, -desc(level))~.) +
   theme_bw(base_size = 14)
 
 
-SummaryErrorAll %>% 
-  select(-series, -origin, - MASE, -RMSSE) %>% 
-  group_by(Level, Method) %>%
-  select(AMSE, Level, Method) %>%
-  ggplot(aes(x=Method, y=AMSE, fill = Method))+
-  labs(title="", x="")+
+
+# SummaryErrorAll %>% 
+#   select(-series, -origin, - AMSE, -MASE) %>% 
+#   group_by(Level, Method) %>%
+#   select(RMSSE, Level, Method) %>%
+#   ggplot(aes(x=Method, y=RMSSE, fill = Method))+
+#   #labs(title="", x="")+
+#   theme(legend.position = "none") + 
+#   theme(strip.text.x = element_text(size=14),
+#         strip.text.y = element_text(size=14)) + 
+#   scale_y_continuous(limits = c(0,3)) + 
+#   geom_boxplot() + 
+#   facet_grid(~Level) + 
+#   coord_flip() +
+#   facet_grid(reorder(Level, -desc(Level))~.) +
+#   theme_bw(base_size = 14)
+
+m1 <- SummaryErrorAll_bind %>% 
+  #select(-, -RMSSE) %>% 
+  #group_by(Level, Method) %>%
+  filter(Accuracy== "MASE") #%>% rename(MASE = Value) %>% select(-Accuracy) 
+
+m2 <- SummaryErrorAll_bind %>% 
+  #select(-, -RMSSE) %>% 
+  #group_by(Level, Method) %>%
+  filter(Accuracy== "RMSSE")# %>% rename(RMSSE = Value) %>% select(-Accuracy) 
+
+
+m <- bind_rows(m1,m2)
+m %>% as_tibble() %>% rename()
+
+m %>%  filter(Methods!="X") %>%
+  ggplot(aes(x=Methods,y=Value, fill = Methods)) +
   theme(legend.position = "none") + 
-  scale_y_continuous(limits = c(0,1)) + 
-  geom_boxplot() + 
-  facet_grid(~Level) + 
-  coord_flip() +
-  facet_grid(reorder(Level, -desc(Level))~.) +
-  theme_bw(base_size = 14)
-
-
-SummaryErrorAll %>% 
-  select(-series, -origin, - AMSE, -MASE) %>% 
-  group_by(Level, Method) %>%
-  select(RMSSE, Level, Method) %>%
-  ggplot(aes(x=Method, y=RMSSE, fill = Method))+
-  #labs(title="", x="")+
-  theme(legend.position = "none") + 
-  theme(strip.text.x = element_text(size=14),
-        strip.text.y = element_text(size=14)) + 
-  scale_y_continuous(limits = c(0,3)) + 
-  geom_boxplot() + 
-  facet_grid(~Level) + 
-  coord_flip() +
-  facet_grid(reorder(Level, -desc(Level))~.) +
-  theme_bw(base_size = 14)
-
-m1 <- SummaryErrorAll %>% 
-  select(-series, -origin, - AMSE, -RMSSE) %>% 
-  group_by(Level, Method) %>%
-  select(MASE, Level, Method) %>% rename(value = MASE) %>% mutate(acc = "MASE") 
-m2 <- SummaryErrorAll %>% 
-  select(-series, -origin, - MASE, -RMSSE) %>% 
-  group_by(Level, Method) %>%
-  select(AMSE, Level, Method) %>% rename(value = AMSE) %>% mutate(acc = "AMSE") 
-m3 <- SummaryErrorAll %>% 
-  select(-series, -origin, - MASE, -AMSE) %>% 
-  group_by(Level, Method) %>%
-  select(RMSSE, Level, Method) %>% rename(value = RMSSE) %>% mutate(acc = "RMSSE")
-
-
-m <- bind_rows(m1,m2,m3)
-
-m %>% 
-  ggplot(aes(x = factor(Method, levels = c("BU", "TD", "COM-SS", "COM-SHR", "ML-RF", "ML-XGB")), y = value, fill = Method)) +
-  theme(legend.position = "none") + 
-  scale_y_continuous(limits = c(0,1.0)) +
-  geom_boxplot() + facet_grid(Level~ acc) +
+  scale_y_continuous(limits = c(0,1.3)) +
+  geom_boxplot() + facet_grid(level~ Accuracy) +
   labs(title = "",subtitle = "",  y = "", x = "") + 
   theme(axis.text.x = element_text(angle=50, hjust=1))
 
+factor(m$Methods)#, levels = m$Methods[order(m$Accuracy)])
 
-SummaryErrorAll %>% 
-  select(-series, -origin) %>% 
-  group_by(Level, Method) %>%
-  gather() %>%
-  ungroup() %>%
-  select(RMSSE, Level, Method) %>%
-  ggplot(aes(x=Method, y=RMSSE, fill = Method))+
-  labs(title="", x="")+
-  theme(legend.position = "none") + 
-  scale_y_continuous(limits = c(0,3)) + 
-  geom_boxplot() + 
-  facet_grid(~Level) + 
-  coord_flip() +
-  facet_grid(reorder(Level, -desc(Level))~.) +
-  facet_wrap(. ~ Method)
-theme_bw(base_size = 14)
+class_acc_data <- Summary_error_test_f[,c(2:7, 9)]
+#colnames(class_acc_data) <- 
+
+class_data <- class_acc_data %>% 
+  mutate(predicted_Rf =
+       case_when(CR_RF == Shr ~ "3",
+                 CR_RF == TDGSF ~ "2",
+                 CR_RF == BU ~ "1"),
+       predicted_svm= 
+         case_when(CR_SVM == Shr ~ "3",
+                 CR_SVM == TDGSF ~ "2",
+                 CR_SVM == BU ~ "1"),
+       predcited_XGB= 
+        case_when(XGB_class == Shr ~ "3",
+                  XGB_class == TDGSF ~ "2",
+                  XGB_class == BU ~ "1")) %>%
+  select(best, predicted_Rf, predicted_svm, predcited_XGB)
+
+class_data_matrix <- cbind(as.factor(class_data[,1]), as.factor(class_data[,2]),as.factor(class_data[,3]),as.factor(class_data[,4]))
+
+class_data_matrix %>% as_tibble() %>%
+  filter(V4==3)
+
+RF_acc <- confusionMatrix(as.factor(class_data_matrix[,2]), as.factor(class_data_matrix[,1]))
+SVM_acc <- confusionMatrix(as.factor(class_data_matrix[,3]), as.factor(class_data_matrix[,1]))
+XGB_acc <- confusionMatrix(as.factor(class_data_matrix[,4]), as.factor(class_data_matrix[,1]))
+
+xtable::xtable(rbind(RF_acc$table, SVM_acc$table, XGB_acc$table))
+
+xtable::xtable(rbind(RF_acc$overall, SVM_acc$table, XGB_acc$table))
+
+xtable::xtable(rbind(RF_acc$byClass[,c(5:7, 11)], SVM_acc$byClass[,c(5:7, 11)], XGB_acc$byClass[,c(5:7, 11)]))
 
 
+
+
+# post-hoc tests
+
+colnames(Summary_error_test_fn)[2:7] <- c("CHF_RF", "CHF_SVM", "CHF_XGB","COM", "BU", "TD")
+colnames(Summary_error_test_fn_RMSSE)[2:7] <-c("CHF_RF", "CHF_SVM", "CHF_XGB","COM", "BU", "TD")
+par(mfrow=c(2,1))
+
+nemenyi(as.matrix(Summary_error_test_fn_MASE[,2:7]),conf.int=0.95,plottype="vline",main="Nemenyi test based on MASE")
+nemenyi(as.matrix(Summary_error_test_f[,2:7]),conf.int=0.95,plottype="vline", main="Nemenyi test based on RMSSE")
+
+nemenyi(as.matrix(Summary_error_test_fn_MASE[,2:7]),conf.int=0.95,plottype="mcb",main="MCB test based on MASE")
+nemenyi(as.matrix(Summary_error_test_fn[,2:7]),conf.int=0.95,plottype="mcb", main="MCB test based on RMSSE")
 
 
