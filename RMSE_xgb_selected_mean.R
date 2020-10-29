@@ -72,7 +72,7 @@ sl.names <- data %>% group_by(sl) %>%
 # group_by both
 hr.data <- data %>% 
   # subset so that all obercations have a date greater than some value
-  filter(date >= lubridate::dmy("28-08-2013")) %>% 
+  filter(date >= lubridate::dmy("28-08-2016")) %>% 
   # group by to establish the categories
   group_by(sl,cbfs) %>% 
   # subset so that you have a minimum number of observations in each category
@@ -173,7 +173,7 @@ for (tsid in 1:55) {
   origin <- 26 #Starting origin (26weeks)
   tslength <- 85 #Available observations
   #tslength <- length(data[[tsid]]$bts[,1]) #Available observations
-  fh = 2 #Forecasting horizon considered
+  fh = 2 #Forecasting window considered
   
   while ((origin+counter+fh) <= tslength){
     
@@ -314,17 +314,19 @@ for (tsid in 1:55) {
 #models <- c("WLS", "Shr", "BU", "MO", "TDFP", "TDGSA", "TDGSF")
 models_selected <- c( "Shr", "BU","TDGSF")
 
-######## second phase ########
 
-#This is what I chose for the good XGb results
-#ML_data_train.dataframe <- as.data.frame(ML_data_train)[,c(1:25,76:104)]
-ML_data_train.dataframe <- as.data.frame(cbind(ML_data_train[,1:25],(ML_data_train[,26:50] +ML_data_train[,51:75])/2, ML_data_train[,76:100], ML_data_train[,101:104]))
 
-##I excluded some other features belwo
 write.csv(ML_data_train.dataframe,"RMSSE_ML_data_train.dataframe.csv")
 write.csv(ML_data_train,"RMSSE_ML_data_train.csv")
 write.csv(Forecast_file_train,"RMSSE_Forecast_file_train.csv")
 write.csv(Summary_error_train,"RMSSE_Summary_error_train.csv")
+
+
+######## second phase ########
+#This is what I chose for the good XGb results
+#ML_data_train.dataframe <- as.data.frame(ML_data_train)[,c(1:25,76:104)]
+ML_data_train.dataframe <- as.data.frame(cbind(ML_data_train[,1:25],(ML_data_train[,26:50] +ML_data_train[,51:75])/2, ML_data_train[,76:100], ML_data_train[,101:104]))
+
 
 Forecast_file_test <- NULL
 chr_test_stack <- NULL
