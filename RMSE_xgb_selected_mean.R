@@ -61,8 +61,6 @@ data = data %>% dplyr::rename(
   prices = actual_scan_sales_price_per_unit,
   sku = namels,
   sl = ls#,
-  #cnc = cnc,
-  #fff=fff
 ) %>% 
   dplyr::mutate(date = lubridate::dmy(date))
 
@@ -148,146 +146,6 @@ for (i in 1:length(price)) {
 }
 
 
-### HF methods ####
-train.obs = 55
-total.obs= 112
-
-# Forecast_file <- NULL
-# Summary_error <- NULL
-# error_list <- NULL
-
-hf.arimax <- function(x,y){
-  hts.data.scan <- hts(data.frame(x)[1:train.obs,], nodes=list(2, c(6,6)), bnames = bnames)
-  hts.data.scan.total <- hts(data.frame(x), nodes=list(2, c(6,6)), bnames =bnames)
-  
-  hts.data.price <- hts(data.frame(y), nodes=list(2, c(6,6)), bnames = bnames)
-  hts.data.scan.test <- hts(data.frame(x)[(1+train.obs) : total.obs, ], nodes=list(2, c(6,6)), bnames = bnames)
-  
-  fore.wls <- forecast(hts.data.scan, h=8, method = "comb", fmethod = "arima",xreg =  as.numeric(aggts(hts.data.price, levels = 0))[1:train.obs]
-                       , newxreg =  as.numeric(aggts(hts.data.price, levels = 0))[(1+train.obs): total.obs], lambda = 0, weights = c("wls"))
-  
-  fore.mint.shr <- forecast(hts.data.scan, h=8, method = "comb", fmethod = "arima",xreg =  as.numeric(aggts(hts.data.price, levels = 0))[1:train.obs]
-                            , newxreg =  as.numeric(aggts(hts.data.price, levels = 0))[(1+train.obs): total.obs], lambda = 0, weights = c("mint"), covariance = "shr")
-  
-  fore.mint.sam <- forecast(hts.data.scan, h=8, method = "comb", fmethod = "arima",xreg =  as.numeric(aggts(hts.data.price, levels = 0))[1:train.obs]
-                            , newxreg =  as.numeric(aggts(hts.data.price, levels = 0))[(1+train.obs): total.obs], lambda = 0, weights = c("mint"), covariance = "sam")
-  fore.bu <- forecast(hts.data.scan, h=8, method = "bu", fmethod = "arima", xreg = as.numeric(aggts(hts.data.price, levels = 0))[1:train.obs]
-                      , newxreg =  as.numeric(aggts(hts.data.price, levels = 0))[(1+train.obs): total.obs], lambda = 0)
-  fore.mo <- forecast(hts.data.scan, h=8, method = "mo", level = 1, fmethod = "arima",xreg =  as.numeric(aggts(hts.data.price, levels = 0))[1:train.obs]
-                      , newxreg =  as.numeric(aggts(hts.data.price, levels = 0))[(1+train.obs): total.obs], lambda = 0)
-  fore.tdfp <- forecast(hts.data.scan, h=8, method = "tdfp", fmethod = "arima",xreg =  as.numeric(aggts(hts.data.price, levels = 0))[1:train.obs]
-                        , newxreg =  as.numeric(aggts(hts.data.price, levels = 0))[(1+train.obs): total.obs], lambda = 0)
-  fore.tdgsa <- forecast(hts.data.scan, h=8, method = "tdgsa", fmethod = "arima",xreg =  as.numeric(aggts(hts.data.price, levels = 0))[1:train.obs]
-                         , newxreg =  as.numeric(aggts(hts.data.price, levels = 0))[(1+train.obs): total.obs], lambda = 0)
-  fore.tdgsf <- forecast(hts.data.scan, h=8, method = "tdgsf", fmethod = "arima",xreg =  as.numeric(aggts(hts.data.price, levels = 0))[1:train.obs]
-                         , newxreg =  as.numeric(aggts(hts.data.price, levels = 0))[(1+train.obs): total.obs], lambda = 0)
-  
-  ##### Forecasts accuracy #####
-  
-  models <- c("WLS", "Shr", "Sam", "BU", "MO", "TDFP", "TDGSA", "TDGSF")
-  
-  ### All time series forecasts #### 
-  
-  for (model_id in 1:8){
-    
-    if (model_id==1){
-      allf <- data.frame(allts(fore.wls))
-    }else if (model_id==2){
-      allf <- data.frame(allts(fore.mint.shr))
-    }else if (model_id==3){
-      allf <- data.frame(allts(fore.mint.sam))
-    }else if (model_id==4){
-      allf <- data.frame(allts(fore.bu))
-    }else if (model_id==5){
-      allf <- data.frame(allts(fore.mo))
-    }else if (model_id==6){
-      allf <- data.frame(allts(fore.tdfp))
-    }else if (model_id==7){
-      allf <- data.frame(allts(fore.tdgsa))
-    }else{
-      allf <- data.frame(allts(fore.tdgsf))
-    }
-    
-    colnames(allf) <- paste0("F_", as.character(colnames(allts(hts.data.scan.test))))
-    test_sample_c <- as.data.frame(allts(hts.data.scan.test))
-    colnames(test_sample_c) <- paste0("A_", as.character(colnames(test_sample_c)))
-    #Combine with actual values
-    allf <- cbind(allf, test_sample_c) 
-    allf$model <- model_id
-    allf$tsid <- tsid
-    Forecast_file <- rbind(Forecast_file, allf)
-    
-    
-    
-    structure <- window(hts.data.scan)
-    m_series <- nrow(smatrix(structure)) #Total number of series at all levels
-    b_series <- length(structure$labels[[(length(structure$labels)-1)+1]]) #Number of series at the bottom level
-    error_list <- NULL
-    for (j in 1:ncol(allts(hts.data.scan.test))){
-      error_list <- rbind(error_list,error_cal(allts(hts.data.scan)[,j],allf[,j],allts(hts.data.scan.test)[,j],ppy=1))
-    }
-    Errors <- data.frame(error_list) ; colnames(Errors) <- c("MASE","AMSE","RMSSE")
-    Errors$Tags <- as.character(unlist(colnames(allts(hts.data.scan.test))))
-    for (z in 1:nrow(Errors)){
-      Errors$Tags[z] <- substr(Errors$Tags[z],1, nchar(Errors$Tags[z]))
-    }
-    Errors$Level <- NA
-    for (idd in 1:nrow(Errors)){
-      for (ldd in 1:length(structure$labels)){
-        if (Errors$Tags[idd] %in% structure$labels[[ldd]]){
-          Errors$Level[idd] <- ldd
-        }
-      }
-    }
-    Errors$model <- model_id
-    Errors$tsid <- tsid
-    Summary_error <- rbind(Summary_error, Errors)
-  }
-  mylist <- list(Summary_error, Forecast_file)
-  return(mylist)
-}
-
-all_results <- list()
-
-for (tsid in 1:length(scan)) {
-  all_results [[tsid]] <- hf.arimax(scan[[tsid]], price[[tsid]])
-}
-
-saveRDS(all_results, "all_results.RDS")
-
-F_file <- NULL
-
-# Chr_file <- Chr_filen <- NULL
-# for (i in 1:length(scan)) {
-#   F_file.t <- (t(chr.scan[[i]][[2]]))
-#   #Chr_file <- rbind(Chr_file, cbind(t(chr.scan[[i]]), i))
-#   rownames(chr.scan.t) = (paste0(colnames(allts(hts.data.scan)), i))
-#    F_file.t <- rbind(Chr_filen, chr.scan.t)
-# }
-
-
-for (tsid in 1:length(scan)) {
-  all_results[[tsid]][[2]][,c(1:15,31,32)]
-  F_file <- rbind(F_file, all_results[[tsid]][[2]])
-}
-write.csv(F_file[,c(1:15,31,32)], "F_file.csv")
-Actual_file <- F_file[,16:32]
-write.csv(F_file[,16:32], "Actual_file.csv")
-
-Acc_file <- NULL
-for (tsid in 1:length(scan)) {
-  Acc_file <- rbind(Acc_file, all_results[[tsid]][[1]])
-}
-
-
-Acc_file_n <- Acc_file %>% as_tibble() %>%
-  mutate(name= paste0(Tags,tsid))
-
-
-write.csv(Acc_file, "Acc_file.csv")
-write.csv(Acc_file_n, "Acc_file_n.csv")
-
-
 
 #######################################################################
 #Reconcile 
@@ -308,7 +166,7 @@ Summary_error_train <- NULL
 chr_train_stack <- ML_data_train <- NULL
 Selected_model <- NULL
 chr_tarin_all <- NULL
-#tsid.outlier <- c(3,5:10)
+
 for (tsid in 1:55) {
   
   counter <- 0
@@ -720,127 +578,6 @@ write.csv(chr_test_stack, "RMSSE_chr_test_stack.csv")
 write.csv(chr_test_selected, "RMSSE_chr_test_selected.csv")
 
 
-library(corrplot)
-corrplot(cor(selected_vars), order = "hclust")
-
-
-
-Summary_error_test_f <- read.csv("RMSSE_Summary_error.csv")
-
-Summary_error_test_f_MASE <- read.csv("MASE_Summary_error_test.csv")
-
-outliers_f <- c(11,12,13,19,43,53,54)
-
-
-Summary_error_test_fn <- Summary_error_test_f %>% 
-  filter(tsid != outliers_f)
-
-Summary_error_test_fn_MASE <- Summary_error_test_f_MASE %>% 
-  filter(tsid != outliers_f)
-
-
-l1 <- apply(Summary_error_test_fn[Summary_error_test_fn$level==1,],2,mean)
-l2 <-apply(Summary_error_test_fn[Summary_error_test_fn$level==2,],2,mean)
-l3 <- apply(Summary_error_test_fn[Summary_error_test_fn$level==3,],2,mean)
-
-
-summary_level_methods <- rbind(l1[1:7], l2[1:7], l3[1:7])
-xtable::xtable(t(summary_level_methods), digits=3)
-
-
-
-
-
-
-# Errors_plot <- ddply(Summary_error_test_f, .(level,counter), colwise(mean))
-# Errors_plot$mid <- as.factor(Errors_plot$mid)
-# Errors_plot$Level <- as.factor(Errors_plot$Level)
-# ggplot(data=Errors_plot, aes(x=origin, y=MASE, colour=level)) + geom_line() + geom_point()
-# 
-# 
-# Errors_agg <- ddply(Summary_error, .(mid, Level), colwise(mean))
-# Errors_agg$origin <- NULL
-# ddply(Errors_agg, .(mid), colwise(mean))
-# 
-# write.csv(Summary_error, paste0("Summary_error_ML_RF",model_type,".csv"), row.names = F)
-
-
-Summary_error_MASE <- bind_cols(Summary_error_test_fn_MASE, Accuracy="MASE") %>% select(-tsid, -counter, -best, -X)#%>% 
- # rename(COM_SHR=COM_Shr,CHR_XGB=XGB_class, CHR_SVM=CR_SVM, CHR_RF=CR_RF, TD=TDGSF)
-Summary_error_RMSSE <- bind_cols(Summary_error_test_fn, Accuracy="RMSSE") %>% select(-tsid, -counter, -best) 
-#%>%
-  #rename(COM_SHR=COM_Shr,CHR_XGB=XGB_class, CHR_SVM=CR_SVM, CHR_RF=CR_RF, TD=TDGSF)
-
-SummaryErrorAll <- bind_rows(pivot_longer(Summary_error_RMSSE, -c(Accuracy, level), values_to = "Value", names_to = "Methods"),
-                             pivot_longer(Summary_error_MASE, -c(Accuracy, level), values_to = "Value", names_to = "Methods"))
-
-SummaryErrorAll1 <- SummaryErrorAll %>% filter(level==1) %>% mutate(level="Level 1") %>% tail(n=-1)
-SummaryErrorAll2 <- SummaryErrorAll %>% filter(level==2) %>% mutate(level="Level 2") %>% tail(n=-1)
-SummaryErrorAll3 <- SummaryErrorAll %>% filter(level==3) %>% mutate(level="Level 3") %>% tail(n=-1)
-
-SummaryErrorAll_bind <- bind_rows(SummaryErrorAll1,SummaryErrorAll2,SummaryErrorAll3) %>% mutate(Value=as.numeric(Value))
-## Plots for the paper
-
-
-SummaryErrorAll %>% 
-  #select(-series, -origin, - AMSE, -RMSSE) %>% 
-  group_by(level, Methods) %>%
-  #select(MASE, Level, Method) %>%
-  ggplot(aes(x=Methods, y=Value, fill=Accuracy))+
-  labs(title="", x="")+
-  theme(legend.position = "none") + 
-  scale_y_continuous(limits = c(0,1)) + 
-  geom_boxplot() + 
-  facet_grid(~level) + 
-  #facet_wrap(~Level)
-  coord_flip() +
-  facet_grid(reorder(level, -desc(level))~.) +
-  theme_bw(base_size = 14)
-
-
-
-# SummaryErrorAll %>% 
-#   select(-series, -origin, - AMSE, -MASE) %>% 
-#   group_by(Level, Method) %>%
-#   select(RMSSE, Level, Method) %>%
-#   ggplot(aes(x=Method, y=RMSSE, fill = Method))+
-#   #labs(title="", x="")+
-#   theme(legend.position = "none") + 
-#   theme(strip.text.x = element_text(size=14),
-#         strip.text.y = element_text(size=14)) + 
-#   scale_y_continuous(limits = c(0,3)) + 
-#   geom_boxplot() + 
-#   facet_grid(~Level) + 
-#   coord_flip() +
-#   facet_grid(reorder(Level, -desc(Level))~.) +
-#   theme_bw(base_size = 14)
-
-m1 <- SummaryErrorAll_bind %>% 
-  #select(-, -RMSSE) %>% 
-  #group_by(Level, Method) %>%
-  filter(Accuracy== "MASE") #%>% rename(MASE = Value) %>% select(-Accuracy) 
-
-m2 <- SummaryErrorAll_bind %>% 
-  #select(-, -RMSSE) %>% 
-  #group_by(Level, Method) %>%
-  filter(Accuracy== "RMSSE")# %>% rename(RMSSE = Value) %>% select(-Accuracy) 
-
-
-m <- bind_rows(m1,m2)
-m %>% as_tibble() %>% rename()
-
-m %>%  filter(Methods!="X") %>%
-  ggplot(aes(x=Methods,y=Value, fill = Methods)) +
-  theme(legend.position = "none") + 
-  scale_y_continuous(limits = c(0,1.3)) +
-  geom_boxplot() + facet_grid(level~ Accuracy) +
-  labs(title = "",subtitle = "",  y = "", x = "") + 
-  theme(axis.text.x = element_text(angle=50, hjust=1))
-
-factor(m$Methods)#, levels = m$Methods[order(m$Accuracy)])
-
-class_acc_data <- Summary_error_test_f[,c(2:7, 9)]
-#colnames(class_acc_data) <- 
 
 class_data <- class_acc_data %>% 
   mutate(predicted_Rf =
@@ -871,8 +608,6 @@ xtable::xtable(rbind(RF_acc$table, SVM_acc$table, XGB_acc$table))
 xtable::xtable(rbind(RF_acc$overall, SVM_acc$table, XGB_acc$table))
 
 xtable::xtable(rbind(RF_acc$byClass[,c(5:7, 11)], SVM_acc$byClass[,c(5:7, 11)], XGB_acc$byClass[,c(5:7, 11)]))
-
-
 
 
 # post-hoc tests
