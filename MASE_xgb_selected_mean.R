@@ -67,7 +67,7 @@ sl.names <- data %>% group_by(sl) %>%
 # group_by both
 hr.data <- data %>% 
   # subset so that all obercations have a date greater than some value
-  filter(date >= lubridate::dmy("28-08-2013")) %>% 
+  filter(date >= lubridate::dmy("28-08-2016")) %>% 
   # group by to establish the categories
   group_by(sl,cbfs) %>% 
   # subset so that you have a minimum number of observations in each category
